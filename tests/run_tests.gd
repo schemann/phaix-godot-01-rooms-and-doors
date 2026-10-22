@@ -884,7 +884,7 @@ func test_restart_at_the_door(step: String) -> Array[String]:
 
 #endregion
 
-#region Graybox standard: closed rooms, materials, lighting (gamekb: grayboxing-and-metrics)
+#region Graybox standard: closed rooms, materials, lighting
 
 func test_materials() -> Array[String]:
 	var failures: Array[String] = []
