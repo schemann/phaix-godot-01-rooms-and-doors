@@ -9,6 +9,7 @@ const SWING_TIME := 0.5 ## Seconds.
 var is_open := false
 
 var _tween: Tween
+var _sleep_steps := 2 ## Counts down before each physics step. At 0 the trigger wakes up.
 var _close_pending := false
 
 @onready var hinge: AnimatableBody3D = $Hinge
@@ -17,11 +18,15 @@ var _close_pending := false
 
 func _ready() -> void:
 	trigger.body_entered.connect(_on_trigger_body_entered)
-	# The trigger sleeps (monitoring is off in the scene) for one physics step: a player the level
-	# has just teleported is still counted at the old place until then.
-	get_tree().physics_frame.connect(_wake_trigger, CONNECT_ONE_SHOT)
 
 func _physics_process(_delta: float) -> void:
+	# The trigger sleeps (monitoring is off in the scene) through the first physics step: Jolt moves a
+	# player the level has just teleported during that step, so it still finds the player at the old
+	# place. The count is 2 because it runs before each step: the trigger wakes up before the second.
+	if _sleep_steps > 0:
+		_sleep_steps -= 1
+		if _sleep_steps == 0:
+			trigger.monitoring = true
 	# Never close on somebody: wait until nobody stands in the swing.
 	if _close_pending and not swing.has_overlapping_bodies():
 		_close_pending = false
@@ -46,9 +51,6 @@ func _swing_to(angle: float) -> void:
 	# Physics process mode: the door's collider moves in step with the physics.
 	_tween = create_tween().set_process_mode(Tween.TWEEN_PROCESS_PHYSICS)
 	_tween.tween_property(hinge, "rotation:y", angle, SWING_TIME).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-
-func _wake_trigger() -> void:
-	trigger.monitoring = true
 
 func _on_trigger_body_entered(_body: Node3D) -> void:
 	open()

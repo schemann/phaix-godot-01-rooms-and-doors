@@ -90,6 +90,7 @@ func _initialize() -> void:
 	await _run("step_09_debug_map: the map starts visible, Tab toggles it", test_toggle_map)
 	await _run("step_09_debug_map: the map reads data only", test_map_reads_data_only)
 	await _run("step_09_debug_map: R restarts with seed + 1", test_regenerate)
+	await _run("step_09_debug_map: R pressed at the first door does not open the door of the new room 0", test_restart_at_the_door.bind("step_09_debug_map"))
 	for step in STEPS:
 		await _run("%s: main scene runs 30 frames" % step, test_scene_runs.bind(step))
 
@@ -832,6 +833,38 @@ func test_regenerate() -> Array[String]:
 	await _unload(main)
 	return failures
 
+## A restart pressed with the player standing in the first door's trigger. Under Jolt a teleported player is
+## still at the old place for the physics step right after the teleport: a trigger that is awake in that step reports the
+## player, and the new room 0 opens its door at once (room 1 is built). The restart is delivered the way a
+## key press is: buffered, and handled at the start of the next frame.
+func test_restart_at_the_door(step: String) -> Array[String]:
+	var failures: Array[String] = []
+	var main := await _load_step(step)
+	var level: Node3D = main.get_node("Level")
+	var player: CharacterBody3D = level.player
+	var source := FileAccess.get_file_as_string("res://steps/%s/level.gd" % step)
+	for action: StringName in [&"regenerate", &"next_seed"]:
+		if not source.contains("\"%s\"" % action):
+			continue # tutorial 01 has R only
+		Input.action_press("move_forward")
+		await _wait_physics(100)
+		Input.action_release("move_forward")
+		await _wait_physics(5)
+		var old_trigger: Area3D = level.rooms[0].door.get_node("Trigger")
+		_expect(failures, old_trigger.overlaps_body(player), "%s: the player is not in the first door's trigger (at %s)" % [action, player.global_position])
+		await _press(action)
+		var door: Node3D = level.rooms[0].door
+		var reports: Array[int] = [0]
+		(door.get_node("Trigger") as Area3D).body_entered.connect(func(_body: Node3D) -> void: reports[0] += 1)
+		var woke := false
+		for i in 6:
+			await physics_frame
+			woke = woke or reports[0] > 0 or door.is_open or level.rooms.size() > 1
+		_expect(failures, not woke, "%s: the new room 0 saw the player at the old place: %d trigger reports, door open %s, %d rooms" % [action, reports[0], door.is_open, level.rooms.size()])
+		await _wait_physics(5)
+	await _unload(main)
+	return failures
+
 #endregion
 
 #region Graybox standard: closed rooms, materials, lighting (gamekb: grayboxing-and-metrics)
@@ -1101,5 +1134,14 @@ func _action(action: StringName) -> void:
 	Input.parse_input_event(press)
 	Input.flush_buffered_events()
 	await process_frame
+
+## Presses an action the way a key does: the event is buffered and handled at the start of the next frame, before that
+## frame's physics steps. (_action() hands it over at once, in the middle of a physics frame.)
+func _press(action: StringName) -> void:
+	var press := InputEventAction.new()
+	press.action = action
+	press.pressed = true
+	Input.parse_input_event(press)
+	await physics_frame
 
 #endregion
