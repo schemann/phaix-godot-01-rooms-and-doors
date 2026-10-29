@@ -1,6 +1,6 @@
 extends RefCounted
 ## Walks the real player from door to door through the input actions only (look_*
-## and move_forward), like a person with a gamepad. Never teleports and never sets
+## and move_forward), like a player with a gamepad. Never teleports and never sets
 ## a transform. Used by the tests and by tools/capture.gd with the step 8 and 9 levels.
 ## Call physics_step() once per physics frame.
 
